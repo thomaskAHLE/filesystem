@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		02FEBA7F218D24C1002F07F3 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 02FEBA7E218D24C1002F07F3 /* main.c */; };
-		02FEBA89218D2555002F07F3 /* softwaredisk.c in Sources */ = {isa = PBXBuildFile; fileRef = 02FEBA85218D2555002F07F3 /* softwaredisk.c */; };
+		02FEBA8E2193BB3A002F07F3 /* softwaredisk.c in Sources */ = {isa = PBXBuildFile; fileRef = 02FEBA8D2193BB3A002F07F3 /* softwaredisk.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -26,9 +26,9 @@
 /* Begin PBXFileReference section */
 		02FEBA7B218D24C1002F07F3 /* FileSystemProject */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = FileSystemProject; sourceTree = BUILT_PRODUCTS_DIR; };
 		02FEBA7E218D24C1002F07F3 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
-		02FEBA85218D2555002F07F3 /* softwaredisk.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = softwaredisk.c; path = ../../../../Downloads/prog3/softwaredisk.c; sourceTree = "<group>"; };
-		02FEBA86218D2555002F07F3 /* filesystem.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = filesystem.h; path = ../../../../Downloads/prog3/filesystem.h; sourceTree = "<group>"; };
-		02FEBA88218D2555002F07F3 /* softwaredisk.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = softwaredisk.h; path = ../../../../Downloads/prog3/softwaredisk.h; sourceTree = "<group>"; };
+		02FEBA8B2193BB3A002F07F3 /* softwaredisk.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = softwaredisk.h; sourceTree = "<group>"; };
+		02FEBA8C2193BB3A002F07F3 /* filesystem.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = filesystem.h; sourceTree = "<group>"; };
+		02FEBA8D2193BB3A002F07F3 /* softwaredisk.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = softwaredisk.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,9 +61,9 @@
 		02FEBA7D218D24C1002F07F3 /* FileSystemProject */ = {
 			isa = PBXGroup;
 			children = (
-				02FEBA86218D2555002F07F3 /* filesystem.h */,
-				02FEBA85218D2555002F07F3 /* softwaredisk.c */,
-				02FEBA88218D2555002F07F3 /* softwaredisk.h */,
+				02FEBA8C2193BB3A002F07F3 /* filesystem.h */,
+				02FEBA8D2193BB3A002F07F3 /* softwaredisk.c */,
+				02FEBA8B2193BB3A002F07F3 /* softwaredisk.h */,
 				02FEBA7E218D24C1002F07F3 /* main.c */,
 			);
 			path = FileSystemProject;
@@ -126,7 +126,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				02FEBA7F218D24C1002F07F3 /* main.c in Sources */,
-				02FEBA89218D2555002F07F3 /* softwaredisk.c in Sources */,
+				02FEBA8E2193BB3A002F07F3 /* softwaredisk.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
