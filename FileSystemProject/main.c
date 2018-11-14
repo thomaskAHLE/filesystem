@@ -16,6 +16,8 @@
 #define MAX_FILES 16
 #define NUM_DIRECT_BLOCKS 11
 
+//number of initail blocks = block for bitvector + block for iNodes + blocks for Directory Entries
+#define NUM_INIT_BLOCKS 18
 
 struct iNode
 {
@@ -23,14 +25,23 @@ struct iNode
     unsigned short direct_blocks[NUM_DIRECT_BLOCKS];
     unsigned short indirect_block;
 };
+
+struct DirectoryEntry{
+    char name[256];
+    unsigned short iNode_number;
+    char padding[SOFTWARE_DISK_BLOCK_SIZE - 256 -sizeof(unsigned short)];
+};
+
 struct FileInternals
 {
-    char name[256];
-    struct iNode file_data;
+    struct DirectoryEntry dir_entry;
+    struct iNode iNode_data;
     FileMode mode;
     unsigned long long position;
     struct FileInternals* next;
 };
+
+
 
 
 struct FileInternals * first_open_file;
@@ -167,34 +178,19 @@ int find_and_write_block(void * data)
 * initializes file system by setting the first and second blocks
 */
 void initialize_fs(){
-    //todo: read from sd
     first_open_file = NULL;
-   /* unsigned long long bit_vector[bit_vector_length];
-    bzero(bit_vector, sizeof(bit_vector[0])* bit_vector_length);
+    for(int i =0; i < NUM_INIT_BLOCKS; i++)
+    clear_block(i);
+    for(int i =0; i < NUM_INIT_BLOCKS; i++)
     find_and_set_empty_block();
-    read_sd_block(bit_vector, 0);
-    struct  iNode inode;
-    inode.size =0;
-    memset(inode.direct_blocks, 0,sizeof(inode.direct_blocks[0])*NUM_DIRECT_BLOCKS);
-    struct iNode iNode_block[num_files];
-    for(int i = 0; i <num_files; i++)
-    {
-        memcpy(& iNode_block[i], &inode, sizeof(struct iNode));
-    }
-    */
-    clear_block(0);
-    clear_block(1);
-    find_and_set_empty_block();
-    find_and_set_empty_block();
-    /*read_sd_block(bit_vector, 0);
-    read_sd_block(iNode_block, 1);*/
 }
 
 unsigned long file_length(File file)
 {
+    fserror = FS_NONE;
     if(file)
     {
-        return file->file_data.size;
+        return file->iNode_data.size;
     }
     fserror = FS_FILE_NOT_FOUND;
     return 0;
@@ -203,17 +199,14 @@ unsigned long file_length(File file)
 int file_exists(char * name)
 {
     fserror = FS_NONE;
-    struct iNode iNode_block[num_files];
-    read_sd_block(iNode_block, 1);
-    for(int i = 0; i < num_files; i++)
+    struct DirectoryEntry de;
+    //starting at block with first directory entry read all directory entries check for name
+    for(int i = 2; i < 2 + num_files; i++)
     {
-        if(iNode_block[i].direct_blocks[0])
-        {
-            char first_block[512];
-            read_sd_block(first_block, iNode_block[i].direct_blocks[0]);
-            if(!strncmp(name,first_block , 256))
+        read_sd_block(&de, i);
+        if(!strncmp(de.name, name, 256))
             return 1;
-        }
+        
     }
     return 0;
 }
@@ -225,7 +218,7 @@ int isFileOpen(char *name)
         File finder = first_open_file;
         while(finder)
         {
-            if(!strncmp(finder->name, name, 256))
+            if(!strncmp(finder->dir_entry.name, name, 256))
             return 1;
             finder = finder->next;
         }
@@ -264,45 +257,41 @@ File create_file(char *name, FileMode mode)
         fserror = FS_ILLEGAL_FILENAME;
         return NULL;
     }
-    struct iNode iNode_block [num_files];
-    read_sd_block(iNode_block, 1);
-    int i = 0;
-    for(; i< num_files; i++)
+    struct DirectoryEntry dir_entry;
+    int i = 2;
+    for(; i< num_files +2; i++)
     {
-        if((iNode_block[i]).direct_blocks[0] == 0)
-        break;
+        read_sd_block(&dir_entry, i);
+        if(dir_entry.name[0] == 0) break;
     }
-    if(i == num_files)
+    if(i == NUM_INIT_BLOCKS)
     {
         return NULL;
+        //too many files find appropriate fsError
     }
-    char first[512];
-    strcpy(first, name);
-    int position_of_first_block = find_and_write_block(first);
-    if(!position_of_first_block)
-    {
-            return NULL;
-    }
-    iNode_block[i].direct_blocks[0] = position_of_first_block;
-    write_sd_block(iNode_block, 1);
-    File file = malloc(sizeof( struct FileInternals));
-    strcpy(file->name, name);
-    file->position = 0;
-    file->next = NULL;
-    file->file_data = iNode_block[i];
+    //i now used for inode number
+    dir_entry.iNode_number = i -2;
+    strncpy(dir_entry.name, name, 256);
+    write_sd_block(&dir_entry, i);
+    
+    File file = malloc(sizeof(struct FileInternals));
+    file->dir_entry = dir_entry;
+    struct iNode iNode_block [num_files];
+    read_sd_block(&iNode_block, 1);
+    file->iNode_data = iNode_block[dir_entry.iNode_number];
+    file->position =0;
     file->mode = mode;
-    File finder = first_open_file;
-    if(!finder)
-    {
-        first_open_file = file;
-    }
+    file->next = NULL;
+    // add to linked list of open files
+    File file_node_ptr = first_open_file;
+    if(!file_node_ptr) first_open_file = file;
     else
     {
-        while(finder->next)
+        while(file_node_ptr->next)
         {
-            finder =  finder->next;
+            file_node_ptr = file_node_ptr->next;
         }
-        finder->next = file;
+        file_node_ptr->next = file;
     }
     return file;
 }
@@ -313,7 +302,9 @@ int main(int argc, const char * argv[]) {
     init_software_disk();
     initialize_fs();
     create_file("test_file.txt", READ_ONLY);
+    fs_print_error();
     create_file("test_file2.txt", READ_ONLY);
+    fs_print_error();
     if(create_file("test_file.txt", READ_ONLY))
     {
         printf("Error should not have created\n");
@@ -332,8 +323,8 @@ int main(int argc, const char * argv[]) {
         printf("File not created: Illegal File Name\n");
     }
     fs_print_error();
-    printf("File: %s, %llu \n", first_open_file->name, first_open_file->position);
+    printf("File: %s, %llu \n", first_open_file->dir_entry.name, first_open_file->position);
     printf("File 1 exists %d, file 2 exists %d should not exist %d", file_exists("test_file.txt"), file_exists("test_file2.txt"), file_exists("test"));
-    
+    printf("File 1 open %d, file 2 open %d should not be open %d", isFileOpen("test_file.txt"), isFileOpen("test_file2.txt"), isFileOpen("test"));
     return 0;
 }
