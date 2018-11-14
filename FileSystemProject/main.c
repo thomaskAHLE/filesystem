@@ -132,7 +132,7 @@ int find_and_set_empty_block()
  * clears block returns  block number if the block is set -1 if the block isn't set
  * @param block_num - block number to clear
  */
-int clear_block(unsigned int block_num)
+int clear_block_in_bit_vector(unsigned int block_num)
 {
     unsigned long long bit_vector[bit_vector_length];
     read_sd_block(bit_vector, 0);
@@ -147,6 +147,32 @@ int clear_block(unsigned int block_num)
     write_sd_block(bit_vector, 0);
     return block_num;
 }
+
+//untested...don't use until tested
+int write_specific_block_in_bit_vector(unsigned int block_num)
+{
+    unsigned long long bit_vector[bit_vector_length];
+    read_sd_block(bit_vector, 0);
+    unsigned int position_in_arr = block_num / (sizeof(unsigned long long)*BITS_PER_BYTE);
+    unsigned int bit_position = block_num % (sizeof(unsigned long long)*BITS_PER_BYTE);
+    unsigned long long bit = 1;
+    bit = bit<< bit_position;
+    //bit was not set
+    if((bit_vector[position_in_arr] & bit)) return -1;
+    //clear block
+    bit_vector[position_in_arr] = bit_vector[position_in_arr] | bit;
+    return block_num;
+    
+}
+
+int clear_block(unsigned int block_num)
+{
+    clear_block_in_bit_vector(block_num);
+    char empty_block[SOFTWARE_DISK_BLOCK_SIZE];
+    bzero(empty_block, SOFTWARE_DISK_BLOCK_SIZE);
+    write_sd_block(empty_block, block_num);
+    return block_num;
+}
 /**
  *checks if the file system has been initialized
  *returns first software disk block
@@ -156,7 +182,7 @@ int is_initialized()
 {
     unsigned long long bit_vector[bit_vector_length];
     read_sd_block(bit_vector, 0);
-    return bit_vector[0] != 0;
+    return bit_vector[0] & 1;
 }
 /**
 * finds an open block and writes to it
@@ -174,13 +200,10 @@ int find_and_write_block(void * data)
     return block_num;
 }
 
-/**
-* initializes file system by setting the first and second blocks
-*/
 void initialize_fs(){
     first_open_file = NULL;
     for(int i =0; i < NUM_INIT_BLOCKS; i++)
-    clear_block(i);
+    clear_block_in_bit_vector(i);
     for(int i =0; i < NUM_INIT_BLOCKS; i++)
     find_and_set_empty_block();
 }
@@ -198,6 +221,10 @@ unsigned long file_length(File file)
 
 int file_exists(char * name)
 {
+    if(!is_initialized())
+    {
+        initialize_fs();
+    }
     fserror = FS_NONE;
     struct DirectoryEntry de;
     //starting at block with first directory entry read all directory entries check for name
@@ -211,8 +238,12 @@ int file_exists(char * name)
     return 0;
 }
 
-int isFileOpen(char *name)
+int is_file_open(char *name)
 {
+    if(!is_initialized())
+    {
+        initialize_fs();
+    }
     if(first_open_file)
     {
         File finder = first_open_file;
@@ -227,25 +258,183 @@ int isFileOpen(char *name)
     return 0;
     
 }
-
-/*File open_file(char *name, FileMode mode)
+void delete_indirect_block(int indirect_block_number)
 {
+    unsigned short indirect_block[num_blocks_in_indirect_block];
+    for(int i = 0; i  <num_blocks_in_indirect_block; i++)
+    {
+        if(indirect_block[i])
+        {
+            clear_block(indirect_block[i]);
+        }
+    }
+    clear_block(indirect_block_number);
+}
+
+void delete_iNode_data(int iNodeNumber)
+{
+    struct iNode iNodeBlock[num_files];
+    read_sd_block(&iNodeBlock, 1);
+    for(int i = 0; i < NUM_DIRECT_BLOCKS; i++)
+    {
+        if(iNodeBlock[iNodeNumber].direct_blocks[i])
+        {
+            clear_block(iNodeBlock[iNodeNumber].direct_blocks[i]);
+            iNodeBlock[iNodeNumber].direct_blocks[i] = 0;
+        }
+    }
+    if(iNodeBlock[iNodeNumber].indirect_block)
+    {
+        delete_indirect_block(iNodeBlock[iNodeNumber].indirect_block);
+        iNodeBlock[iNodeNumber].indirect_block = 0;
+    }
+    iNodeBlock[iNodeNumber].size = 0;
+    write_sd_block(&iNodeNumber, 1);
+}
+
+void delete_dir_entry(char *name)
+{
+    struct DirectoryEntry de;
+    int de_block_number = 2;
+    for(; de_block_number < num_files + 2; de_block_number++)
+    {
+        read_sd_block(&de, de_block_number);
+        if(!strncmp(de.name, name, 256))
+        {
+            break;
+        }
+    }
+    de.name[0]= '\0';
+    delete_iNode_data(de.iNode_number);
+    write_sd_block(&de, de_block_number);
+}
+
+//completely un-tested
+int delete_file(char *name)
+{
+    fserror = FS_NONE;
     if(!file_exists(name))
     {
+        fserror = FS_FILE_NOT_FOUND;
+        return 0;
+    }
+    if(is_file_open(name))
+    {
+        fserror = FS_FILE_OPEN;
+        return 0;
+    }
+    delete_dir_entry(name);
+    return 1;
+}
+void add_to_open_files(File file)
+{
+    
+    if(!first_open_file) first_open_file = file;
+    else
+    {
+        File file_node_ptr = first_open_file;
+        while(file_node_ptr->next)
+        {
+            file_node_ptr = file_node_ptr->next;
+        }
+        file_node_ptr->next = file;
+    }
+    
+}
+
+void close_file(File file)
+{
+    if(!is_initialized())
+    {
+        initialize_fs();
+    }
+    fserror = FS_NONE;
+    if(!file)
+    {
+        fserror = FS_FILE_NOT_FOUND;
+    }
+    else if(!is_file_open(file->dir_entry.name))
+    {
+        fserror = FS_FILE_NOT_OPEN;
+    }
+    else
+    {
+        if(!strncmp(file->dir_entry.name, first_open_file->dir_entry.name,256))
+        {
+            if(!first_open_file->next)
+            {
+                first_open_file = NULL;
+            }
+            else
+            {
+                first_open_file = first_open_file->next;
+            }
+        }
+        else
+        {
+            File file_iterator = first_open_file;
+            while(strncmp(file_iterator->next->dir_entry.name, file->dir_entry.name, 256))
+            {
+                file_iterator = file_iterator->next;
+            }
+            file_iterator->next = file->next;
+            
+        }
+        free(file);
+    }
+}
+File open_file(char *name, FileMode mode)
+{
+    if(!is_initialized())
+    {
+        initialize_fs();
+    }
+    fserror = FS_NONE;
+    if(!file_exists(name))
+    {
+        fserror = FS_FILE_NOT_FOUND;
         return NULL;
     }
-    if(first_open_file)
+    if(is_file_open(name))
     {
         File finder = first_open_file;
         while(finder)
         {
-            if(strncmp(finder->name, name, 256));
+            if(!strncmp(finder->dir_entry.name, name, 256))
+            break;
+        }
+        return finder;
+    }
+    File file_to_open = malloc(sizeof(struct FileInternals));
+    struct DirectoryEntry de;
+    for(int i = 2; i < num_files + 2; i++)
+    {
+        read_sd_block(&de, i);
+        if(! strncmp(de.name, name, 256))
+        {
+            file_to_open->dir_entry = de;
+            break;
         }
     }
-}*/
+    struct iNode iNode_block [num_files];
+    read_sd_block(&iNode_block, 1);
+    file_to_open->iNode_data = iNode_block[file_to_open->dir_entry.iNode_number];
+    file_to_open->mode = mode;
+    file_to_open->position = 0;
+    file_to_open->next = NULL;
+    add_to_open_files(file_to_open);
+    
+    
+    return file_to_open;
+    
+}
 
 File create_file(char *name, FileMode mode)
 {
+    if(!is_initialized())
+    {
+        initialize_fs();
+    }
     fserror = FS_NONE;
     if(file_exists(name))
     {
@@ -282,18 +471,99 @@ File create_file(char *name, FileMode mode)
     file->position =0;
     file->mode = mode;
     file->next = NULL;
-    // add to linked list of open files
-    File file_node_ptr = first_open_file;
-    if(!file_node_ptr) first_open_file = file;
-    else
-    {
-        while(file_node_ptr->next)
-        {
-            file_node_ptr = file_node_ptr->next;
-        }
-        file_node_ptr->next = file;
-    }
+    add_to_open_files(file);
     return file;
+}
+//debugging methods
+void print_open_files()
+{
+    File file_iterator = first_open_file;
+    if(!first_open_file)
+    {
+        printf("No open files \n");
+    }
+    while(file_iterator)
+    {
+        printf("File open with name %s inode number %d and length %llu \n", file_iterator->dir_entry.name, file_iterator->dir_entry.iNode_number, file_iterator->iNode_data.size);
+        file_iterator = file_iterator->next;
+    }
+}
+
+void clearblock_test()
+{
+    char testblock[SOFTWARE_DISK_BLOCK_SIZE];
+    memset(testblock, 'a', SOFTWARE_DISK_BLOCK_SIZE *sizeof(char));
+    printf("%s\n",testblock);
+    int blockNum = find_and_write_block(testblock);
+    bzero(testblock, SOFTWARE_DISK_BLOCK_SIZE* (sizeof(char)));
+    read_sd_block(testblock, blockNum);
+    printf("%s written to block \n", testblock);
+    clear_block(blockNum);
+    read_sd_block(testblock, blockNum);
+    printf("%s after clear_block\n", testblock);
+}
+void max_file_test()
+{
+    File fileArr[num_files];
+    char  fileName[11];
+   
+    for(int i = 0; i < num_files ;i++)
+    {
+        sprintf(fileName, "%s%d%s","file",i,".txt");
+        fileArr[i] = create_file(fileName, READ_ONLY);
+        fs_print_error();
+    }
+    print_open_files();
+    printf("closing all files...\n");
+    for(int i = 0; i< num_files; i++)
+    {
+        close_file(fileArr[i]);
+    }
+    print_open_files();
+    printf("opening all files ...\n");
+    for(int i = 0; i < num_files ;i++)
+    {
+        sprintf(fileName, "%s%d%s","file",i,".txt");
+        fileArr[i] = open_file(fileName, READ_ONLY);
+        fs_print_error();
+    }
+    print_open_files();
+    printf("closing all files...\n");
+    for(int i = 0; i< num_files; i++)
+    {
+        close_file(fileArr[i]);
+        fs_print_error();
+    }
+    print_open_files();
+    printf("opening out of order... \n");
+    for(int i = 0; i < num_files/2; i++)
+    {
+        sprintf(fileName, "%s%d%s","file",i,".txt");
+        fileArr[i] = open_file(fileName, READ_ONLY);
+        fs_print_error();
+        sprintf(fileName, "%s%d%s","file",num_files - i -1,".txt");
+        fileArr[num_files-i-1] = open_file(fileName, READ_ONLY);
+        fs_print_error();
+    }
+    print_open_files();
+    printf("closing out of order files \n");
+    for(int i = 0; i< num_files; i++)
+    {
+        close_file(fileArr[i]);
+        fs_print_error();
+        print_open_files();
+    }
+    printf("deleting files...\n");
+    for(int i = 0; i < num_files; i++)
+    {
+        sprintf(fileName, "%s%d%s","file",i,".txt");
+        delete_file(fileName);
+        fs_print_error();
+    }
+    
+    
+    
+    
 }
 
 int main(int argc, const char * argv[]) {
@@ -301,11 +571,9 @@ int main(int argc, const char * argv[]) {
     printf("%llu\n", max_file_size);
     init_software_disk();
     initialize_fs();
-    create_file("test_file.txt", READ_ONLY);
-    fs_print_error();
-    create_file("test_file2.txt", READ_ONLY);
-    fs_print_error();
-    if(create_file("test_file.txt", READ_ONLY))
+    clearblock_test();
+    max_file_test();
+    if(create_file("file1.txt", READ_ONLY))
     {
         printf("Error should not have created\n");
     }
@@ -323,8 +591,5 @@ int main(int argc, const char * argv[]) {
         printf("File not created: Illegal File Name\n");
     }
     fs_print_error();
-    printf("File: %s, %llu \n", first_open_file->dir_entry.name, first_open_file->position);
-    printf("File 1 exists %d, file 2 exists %d should not exist %d", file_exists("test_file.txt"), file_exists("test_file2.txt"), file_exists("test"));
-    printf("File 1 open %d, file 2 open %d should not be open %d", isFileOpen("test_file.txt"), isFileOpen("test_file2.txt"), isFileOpen("test"));
     return 0;
 }
