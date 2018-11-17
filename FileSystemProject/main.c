@@ -69,7 +69,7 @@ void fs_print_error()
             printf("FS: Already Exists \n");
             break;
         case FS_OUT_OF_SPACE:
-            printf("FS: Out Of Space \n");
+            printf("FS: Out Of Space or reached max file limit \n");
             break;
         case FS_FILE_OPEN:
             printf("FS: File Open\n");
@@ -162,9 +162,83 @@ int write_specific_block_in_bit_vector(unsigned int block_num)
     //clear block
     bit_vector[position_in_arr] = bit_vector[position_in_arr] | bit;
     return block_num;
-    
+}
+int find_and_write_block(void * data)
+{
+    int block_num = find_and_set_empty_block();
+    // 0 is the bit vector block so it should always be greater than 0
+    if(block_num > 0)
+    {
+        write_sd_block(data, block_num);
+    }
+    return block_num;
 }
 
+//temporarly just writes to beginning and if buf < 512
+unsigned long write_file(File file, void *buf, unsigned long numbytes)
+{
+    fserror = FS_NONE;
+    char * data = (char *) buf;
+    if(file->mode == READ_ONLY)
+    {
+        fserror = FS_FILE_READ_ONLY;
+        return 0;
+    }
+    unsigned short iNode_block_number = (file->position)/SOFTWARE_DISK_BLOCK_SIZE;
+    unsigned short block_number;
+    unsigned long long bytes_written = 0;
+    unsigned long long data_length = strlen(data);
+    if(iNode_block_number < NUM_DIRECT_BLOCKS)
+    {
+        block_number = file->iNode_data.direct_blocks[iNode_block_number];
+        //dont need to over write
+        char data_to_write[SOFTWARE_DISK_BLOCK_SIZE];
+        while( iNode_block_number < NUM_DIRECT_BLOCKS && bytes_written < data_length &&
+              !(file->iNode_data.direct_blocks[iNode_block_number]))
+        {
+            bzero(data_to_write, SOFTWARE_DISK_BLOCK_SIZE *sizeof(char));
+            unsigned long long dataForBlock = data_length < SOFTWARE_DISK_BLOCK_SIZE ? data_length : SOFTWARE_DISK_BLOCK_SIZE;
+            strncpy(data_to_write, data + bytes_written, dataForBlock);
+            block_number = find_and_write_block(data_to_write);
+            file->iNode_data.direct_blocks[iNode_block_number] = block_number;
+            if(!block_number )
+            {
+                fserror = FS_OUT_OF_SPACE;
+                struct iNode iNodeBlock[num_files];
+                read_sd_block(iNodeBlock, 1);
+                iNodeBlock[file->dir_entry.iNode_number] = file->iNode_data;
+                write_sd_block(iNodeBlock, 1);
+                return bytes_written;
+            }
+            if(dataForBlock < SOFTWARE_DISK_BLOCK_SIZE)
+            {
+                struct iNode iNodeBlock[num_files];
+                read_sd_block(iNodeBlock, 1);
+                iNodeBlock[file->dir_entry.iNode_number] = file->iNode_data;
+                write_sd_block(iNodeBlock, 1);
+                return bytes_written + dataForBlock;
+            }
+            write_sd_block(data_to_write, block_number);
+            bytes_written += dataForBlock;
+            iNode_block_number++;
+           //need to handle running into data && running out of direct blocks etc.
+        }
+    }
+    else{
+        //need to handle writing in direct blocks
+    }
+    
+    return bytes_written;
+}
+
+//should file set a block if it is not initialized
+int seek_file(File file, unsigned long bytepos)
+{
+    if(bytepos >= max_file_size)
+        return 0;
+    file->position = bytepos;
+    return 1;
+}
 int clear_block(unsigned int block_num)
 {
     clear_block_in_bit_vector(block_num);
@@ -184,21 +258,8 @@ int is_initialized()
     read_sd_block(bit_vector, 0);
     return bit_vector[0] & 1;
 }
-/**
-* finds an open block and writes to it
-* @param data - data to write must be 512 bytes
-* @return block number returned if open block is found otherwise returns 0
-*/
-int find_and_write_block(void * data)
-{
-    int block_num = find_and_set_empty_block();
-    // 0 is the bit vector block so it should always be greater than 0
-    if(block_num > 0)
-    {
-        write_sd_block(data, block_num);
-    }
-    return block_num;
-}
+
+
 
 void initialize_fs(){
     first_open_file = NULL;
@@ -233,7 +294,6 @@ int file_exists(char * name)
         read_sd_block(&de, i);
         if(!strncmp(de.name, name, 256))
             return 1;
-        
     }
     return 0;
 }
@@ -253,7 +313,6 @@ int is_file_open(char *name)
             return 1;
             finder = finder->next;
         }
-        
     }
     return 0;
     
@@ -280,8 +339,8 @@ void delete_iNode_data(int iNodeNumber)
         if(iNodeBlock[iNodeNumber].direct_blocks[i])
         {
             clear_block(iNodeBlock[iNodeNumber].direct_blocks[i]);
-            iNodeBlock[iNodeNumber].direct_blocks[i] = 0;
         }
+         iNodeBlock[iNodeNumber].direct_blocks[i] = 0;
     }
     if(iNodeBlock[iNodeNumber].indirect_block)
     {
@@ -328,7 +387,6 @@ int delete_file(char *name)
 }
 void add_to_open_files(File file)
 {
-    
     if(!first_open_file) first_open_file = file;
     else
     {
@@ -339,7 +397,6 @@ void add_to_open_files(File file)
         }
         file_node_ptr->next = file;
     }
-    
 }
 
 void close_file(File file)
@@ -378,7 +435,6 @@ void close_file(File file)
                 file_iterator = file_iterator->next;
             }
             file_iterator->next = file->next;
-            
         }
         free(file);
     }
@@ -423,10 +479,7 @@ File open_file(char *name, FileMode mode)
     file_to_open->position = 0;
     file_to_open->next = NULL;
     add_to_open_files(file_to_open);
-    
-    
     return file_to_open;
-    
 }
 
 File create_file(char *name, FileMode mode)
@@ -455,14 +508,13 @@ File create_file(char *name, FileMode mode)
     }
     if(i == NUM_INIT_BLOCKS)
     {
+        fserror = FS_OUT_OF_SPACE;
         return NULL;
-        //too many files find appropriate fsError
     }
     //i now used for inode number
     dir_entry.iNode_number = i -2;
     strncpy(dir_entry.name, name, 256);
     write_sd_block(&dir_entry, i);
-    
     File file = malloc(sizeof(struct FileInternals));
     file->dir_entry = dir_entry;
     struct iNode iNode_block [num_files];
@@ -489,6 +541,10 @@ void print_open_files()
     }
 }
 
+void print_file_data(File file )
+{
+    
+}
 void clearblock_test()
 {
     char testblock[SOFTWARE_DISK_BLOCK_SIZE];
@@ -553,6 +609,9 @@ void max_file_test()
         fs_print_error();
         print_open_files();
     }
+    printf("trying to create an extra file \n");
+    create_file("file17.txt", READ_ONLY);
+    fs_print_error();
     printf("deleting files...\n");
     for(int i = 0; i < num_files; i++)
     {
@@ -560,28 +619,25 @@ void max_file_test()
         delete_file(fileName);
         fs_print_error();
     }
-    
-    
-    
-    
 }
 
 int main(int argc, const char * argv[]) {
     // insert code here...
-    printf("%llu\n", max_file_size);
+        printf("%llu\n", max_file_size);
     init_software_disk();
     initialize_fs();
-    clearblock_test();
-    max_file_test();
-    if(create_file("file1.txt", READ_ONLY))
-    {
-        printf("Error should not have created\n");
-    }
-    else
-    {
-        printf("File Already exists\n");
-    }
-    fs_print_error();
+    File file = create_file("file1.txt", READ_WRITE);
+    close_file(file);
+     file = open_file("file1.txt", READ_WRITE);
+    close_file(file);
+    delete_file("file1.txt");
+    file = create_file("file1.txt", READ_WRITE);
+    //clearblock_test();
+    //max_file_test();
+   
+    char test_data[515];
+    memset(test_data, 'z', 515);
+    test_data[514] = '\0';
     if(create_file("\0", READ_ONLY))
     {
         printf("Error should not have been created\n");
@@ -591,5 +647,8 @@ int main(int argc, const char * argv[]) {
         printf("File not created: Illegal File Name\n");
     }
     fs_print_error();
+    unsigned long wrtn = write_file(file, test_data, 513);
+    fs_print_error();
+    
     return 0;
 }
