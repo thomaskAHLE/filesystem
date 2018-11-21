@@ -18,6 +18,7 @@
 
 //number of initail blocks = block for bitvector + block for iNodes + blocks for Directory Entries
 #define NUM_INIT_BLOCKS 18
+#define MAX_FILE_SIZE SOFTWARE_DISK_BLOCK_SIZE * (NUM_DIRECT_BLOCKS + num_blocks_in_indirect_block)
 
 struct iNode
 {
@@ -48,7 +49,7 @@ struct FileInternals * first_open_file;
 const unsigned int bit_vector_length = SOFTWARE_DISK_BLOCK_SIZE/sizeof(unsigned long long);
 const unsigned int num_files = SOFTWARE_DISK_BLOCK_SIZE/sizeof(struct iNode);
 const unsigned int num_blocks_in_indirect_block = SOFTWARE_DISK_BLOCK_SIZE/sizeof(unsigned short);
-const unsigned long long max_file_size = SOFTWARE_DISK_BLOCK_SIZE * (NUM_DIRECT_BLOCKS + num_blocks_in_indirect_block);
+
 FSError fserror;
 
 
@@ -234,7 +235,7 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes)
 //should file set a block if it is not initialized
 int seek_file(File file, unsigned long bytepos)
 {
-    if(bytepos >= max_file_size)
+    if(bytepos >= MAX_FILE_SIZE)
         return 0;
     file->position = bytepos;
     return 1;
@@ -623,7 +624,7 @@ void max_file_test()
 
 int main(int argc, const char * argv[]) {
     // insert code here...
-        printf("%llu\n", max_file_size);
+        printf("%llu\n", MAX_FILE_SIZE);
     init_software_disk();
     initialize_fs();
     File file = create_file("file1.txt", READ_WRITE);
