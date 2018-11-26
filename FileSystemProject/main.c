@@ -150,6 +150,11 @@ int clear_block_in_bit_vector(unsigned int block_num)
 }
 
 //untested...don't use until tested
+
+/**
+ * Write specified block in bit vector
+ * @return block number or -1 if bit was not set
+ */
 int write_specific_block_in_bit_vector(unsigned int block_num)
 {
     unsigned long long bit_vector[bit_vector_length];
@@ -164,6 +169,11 @@ int write_specific_block_in_bit_vector(unsigned int block_num)
     bit_vector[position_in_arr] = bit_vector[position_in_arr] | bit;
     return block_num;
 }
+
+/**
+ * Searches bit vector for empty block and writes 'data' to it.
+ * @return block number
+ */
 int find_and_write_block(void * data)
 {
     int block_num = find_and_set_empty_block();
@@ -175,7 +185,11 @@ int find_and_write_block(void * data)
     return block_num;
 }
 
-//temporarly just writes to beginning and if buf < 512
+//temporarily just writes to beginning and if buf < 512
+/**
+ * writes 'numbytes' of data from 'buf' into 'file' at the current file position.
+ * @return number of bytes written. If out of space, return value may be lower than numbytes
+ */
 unsigned long write_file(File file, void *buf, unsigned long numbytes)
 {
     fserror = FS_NONE;
@@ -251,13 +265,27 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes)
 }
 
 //should file set a block if it is not initialized
+/**
+ * sets current position in file to 'bytepos', always relative to the beginning of file.
+ * Seeks past the current end of file should extend the file.
+ * @return 1 if success, 0 if failure
+ */
 int seek_file(File file, unsigned long bytepos)
 {
-    if(bytepos >= MAX_FILE_SIZE)
+    if(bytepos >= MAX_FILE_SIZE){
+        fserror = FS_EXCEEDS_MAX_FILE_SIZE;
         return 0;
+    }
     file->position = bytepos;
+    fserror = FS_NONE;
     return 1;
+
 }
+
+/**
+ * clear block at 'block_num'
+ * @return block number
+ */
 int clear_block(unsigned int block_num)
 {
     clear_block_in_bit_vector(block_num);
@@ -279,7 +307,9 @@ int is_initialized()
 }
 
 
-
+/**
+ * Initializes file system
+ */
 void initialize_fs(){
     first_open_file = NULL;
     for(int i =0; i < NUM_INIT_BLOCKS; i++)
@@ -288,6 +318,10 @@ void initialize_fs(){
     find_and_set_empty_block();
 }
 
+/**
+ * finds current length of 'file'
+ * @return current length of file in bytes
+ */
 unsigned long file_length(File file)
 {
     fserror = FS_NONE;
@@ -299,6 +333,10 @@ unsigned long file_length(File file)
     return 0;
 }
 
+/**
+ * determines if file with 'name' exists
+ * @return 1 on success or 0 on failure
+ */
 int file_exists(char * name)
 {
     if(!is_initialized())
@@ -317,6 +355,10 @@ int file_exists(char * name)
     return 0;
 }
 
+/**
+ * checks if file with 'name' is open
+ * @return 1 if open, 0 if not
+ */
 int is_file_open(char *name)
 {
     if(!is_initialized())
@@ -329,13 +371,17 @@ int is_file_open(char *name)
         while(finder)
         {
             if(!strncmp(finder->dir_entry.name, name, 256))
-            return 1;
+                return 1;
             finder = finder->next;
         }
     }
     return 0;
     
 }
+
+/**
+ * clears indirect block at 'indirect_block_number'
+ */
 void delete_indirect_block(int indirect_block_number)
 {
     unsigned short indirect_block[num_blocks_in_indirect_block];
@@ -349,6 +395,9 @@ void delete_indirect_block(int indirect_block_number)
     clear_block(indirect_block_number);
 }
 
+/**
+ * deletes data in iNode 'iNodeNumber'
+ */
 void delete_iNode_data(int iNodeNumber)
 {
     struct iNode iNodeBlock[num_files];
@@ -370,6 +419,9 @@ void delete_iNode_data(int iNodeNumber)
     write_sd_block(&iNodeNumber, 1);
 }
 
+/**
+ * deletes directory entry with 'name'
+ */
 void delete_dir_entry(char *name)
 {
     struct DirectoryEntry de;
@@ -388,6 +440,10 @@ void delete_dir_entry(char *name)
 }
 
 //completely un-tested
+/**
+ * deletes the file named 'name'
+ * @return 1 on success, 0 on failure
+ */
 int delete_file(char *name)
 {
     fserror = FS_NONE;
@@ -404,6 +460,10 @@ int delete_file(char *name)
     delete_dir_entry(name);
     return 1;
 }
+
+/**
+ * adds 'file' to list of open files
+ */
 void add_to_open_files(File file)
 {
     if(!first_open_file) first_open_file = file;
@@ -418,6 +478,9 @@ void add_to_open_files(File file)
     }
 }
 
+/**
+ * close 'file'
+ */
 void close_file(File file)
 {
     if(!is_initialized())
@@ -458,6 +521,11 @@ void close_file(File file)
         free(file);
     }
 }
+
+/**
+ * Open existing file with 'name' and access mode 'mode'and sets current file position to byte 0
+ * @return open file or null on error
+ */
 File open_file(char *name, FileMode mode)
 {
     if(!is_initialized())
@@ -642,15 +710,15 @@ void max_file_test()
 
 int main(int argc, const char * argv[]) {
     // insert code here...
-        printf("%llu\n", MAX_FILE_SIZE);
+        printf("%ud\n", MAX_FILE_SIZE);
     init_software_disk();
     initialize_fs();
-    File file = create_file("file1.txt", READ_WRITE);
+    File file = create_file("file.txt", READ_WRITE);
     close_file(file);
-     file = open_file("file1.txt", READ_WRITE);
+    file = open_file("file.txt", READ_WRITE);
     close_file(file);
-    delete_file("file1.txt");
-    file = create_file("file1.txt", READ_WRITE);
+    delete_file("file.txt");
+    file = create_file("file.txt", READ_WRITE);
     //clearblock_test();
     //max_file_test();
    
@@ -668,12 +736,30 @@ int main(int argc, const char * argv[]) {
     fs_print_error();
     unsigned long wrtn = write_file(file, test_data, 514);
     fs_print_error();
-    bzero(test_data, 515);
-    read_sd_block(test_data, 18);
-    printf("first block %s ", test_data);
-    bzero(test_data, 515);
-    read_sd_block(test_data, 19);
-    printf("second block %s ", test_data);
+
+    //create a lot of files
+    printf("Creating lots of files/n");
+    for(int i = 0; i < 25; i++){
+        char buffer[50];
+        sprintf(buffer, "file%d.txt", i);
+        if(create_file(buffer, READ_WRITE))
+            printf("file%d successfully created\n", i);
+        else
+            printf("file%d not created\n", i);
+    }
+
+    //delete file
+    close_file(file);
+    delete_file("file.txt");
+    file = open_file("file.txt", READ_WRITE);
+    fs_print_error();
+    //check if now there is space to write another file
+    file = create_file("file24.txt", READ_WRITE);
+    fs_print_error();
+
+
+
+
     
     return 0;
 }
