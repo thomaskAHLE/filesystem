@@ -149,7 +149,7 @@ int clear_block_in_bit_vector(unsigned int block_num)
     return block_num;
 }
 
-//untested...don't use until tested
+
 
 /**
  * Write specified block in bit vector
@@ -185,13 +185,145 @@ int find_and_write_block(void * data)
     return block_num;
 }
 
-//temporarily just writes to beginning and if buf < 512
+
+unsigned long write_to_direct_blocks(File file, char * data, unsigned long numbytes, unsigned short direct_block_index, unsigned short offset_bytes )
+{
+    unsigned short block_number;
+    unsigned long long bytes_written = 0;
+    
+    numbytes = strlen(data)  < numbytes ? strlen(data) : numbytes;
+    unsigned long long remaining_data = numbytes;
+    unsigned long long dataForBlock = 0;
+    block_number = file->iNode_data.direct_blocks[direct_block_index];
+    char data_to_write[SOFTWARE_DISK_BLOCK_SIZE];
+    while( direct_block_index < NUM_DIRECT_BLOCKS && bytes_written < numbytes)
+    {
+        bzero(data_to_write, SOFTWARE_DISK_BLOCK_SIZE *sizeof(char));
+        dataForBlock = (remaining_data < SOFTWARE_DISK_BLOCK_SIZE - offset_bytes? remaining_data : SOFTWARE_DISK_BLOCK_SIZE- offset_bytes);
+        if(!(file->iNode_data.direct_blocks[direct_block_index]))
+        {
+            memcpy(data_to_write + offset_bytes, data + bytes_written, dataForBlock);
+            block_number = find_and_write_block(data_to_write);
+            file->iNode_data.direct_blocks[direct_block_index] = block_number;
+            if(block_number)
+                file->iNode_data.size += dataForBlock;
+        }
+        else
+        {
+            block_number = file->iNode_data.direct_blocks[direct_block_index];
+            read_sd_block(data_to_write, block_number);
+            file->iNode_data.size += dataForBlock <= strlen(data_to_write) ? 0 : dataForBlock - strlen(data_to_write);
+            memcpy(data_to_write  + offset_bytes, data + bytes_written, dataForBlock);
+            write_sd_block(data_to_write, block_number);
+        }
+        if(!block_number )
+        {
+            fserror = FS_OUT_OF_SPACE;
+            struct iNode iNodeBlock[num_files];
+            read_sd_block(iNodeBlock, 1);
+            iNodeBlock[file->dir_entry.iNode_number] = file->iNode_data;
+            write_sd_block(iNodeBlock, 1);
+            return bytes_written;
+        }
+        if(dataForBlock + bytes_written == numbytes)
+        {
+            struct iNode iNodeBlock[num_files];
+            read_sd_block(iNodeBlock, 1);
+            iNodeBlock[file->dir_entry.iNode_number] = file->iNode_data;
+            write_sd_block(iNodeBlock, 1);
+            file->position += dataForBlock;
+            return bytes_written + dataForBlock;
+        }
+        bytes_written += dataForBlock;
+        file->position += dataForBlock;
+        direct_block_index++;
+        remaining_data -= dataForBlock;
+        offset_bytes = 0;
+    }
+    struct iNode iNodeBlock[num_files];
+    read_sd_block(iNodeBlock, 1);
+    iNodeBlock[file->dir_entry.iNode_number] = file->iNode_data;
+    write_sd_block(iNodeBlock, 1);
+    return bytes_written;
+}
+
+unsigned long write_to_indirect_blocks(File file, char *data, unsigned long numbytes, unsigned short offset_bytes, unsigned short indirect_block_index)
+{
+    unsigned long bytes_written = 0;
+    if(!(file->iNode_data.indirect_block ))
+    {
+        file->iNode_data.indirect_block = find_and_set_empty_block();
+        struct iNode iNodeBlock[num_files];
+        read_sd_block(iNodeBlock, 1);
+        iNodeBlock[file->dir_entry.iNode_number] = file->iNode_data;
+        write_sd_block(iNodeBlock, 1);
+    }
+    unsigned short indirect_block[num_blocks_in_indirect_block];
+    unsigned long remaining_data = numbytes;
+    read_sd_block(indirect_block,file->iNode_data.indirect_block);
+    char data_to_write[SOFTWARE_DISK_BLOCK_SIZE];
+    unsigned short dataForBlock = 0;
+    unsigned short block_number;
+    while(indirect_block_index < num_blocks_in_indirect_block && bytes_written < numbytes)
+    {
+        bzero(data_to_write, SOFTWARE_DISK_BLOCK_SIZE *sizeof(char));
+        dataForBlock = remaining_data < SOFTWARE_DISK_BLOCK_SIZE - offset_bytes? remaining_data : SOFTWARE_DISK_BLOCK_SIZE- offset_bytes;
+        if(!(indirect_block[indirect_block_index]))
+        {
+            memcpy(data_to_write + offset_bytes, data + bytes_written, dataForBlock);
+            block_number = find_and_write_block(data_to_write);
+            indirect_block[indirect_block_index] = block_number;
+            if(block_number)
+            file->iNode_data.size += dataForBlock;
+        }
+        else
+        {
+            block_number = indirect_block[indirect_block_index];
+            read_sd_block(data_to_write, block_number);
+            file->iNode_data.size += dataForBlock <= strlen(data_to_write) ? 0 : dataForBlock - strlen(data_to_write);
+            memcpy(data_to_write  + offset_bytes, data + bytes_written, dataForBlock);
+            write_sd_block(data_to_write, block_number);
+        }
+        if(!block_number )
+        {
+            fserror = FS_OUT_OF_SPACE;
+            struct iNode iNodeBlock[num_files];
+            read_sd_block(iNodeBlock, 1);
+            iNodeBlock[file->dir_entry.iNode_number] = file->iNode_data;
+            write_sd_block(iNodeBlock, 1);
+            write_sd_block(indirect_block, file->iNode_data.indirect_block);
+            file->position += dataForBlock;
+            return bytes_written;
+        }
+        if(dataForBlock + bytes_written == numbytes)
+        {
+            struct iNode iNodeBlock[num_files];
+            read_sd_block(iNodeBlock, 1);
+            iNodeBlock[file->dir_entry.iNode_number] = file->iNode_data;
+            write_sd_block(iNodeBlock, 1);
+            write_sd_block(indirect_block, file->iNode_data.indirect_block);
+            file->position += dataForBlock;
+            return bytes_written + dataForBlock;
+        }
+        bytes_written += dataForBlock;
+        file->position += dataForBlock;
+        indirect_block_index++;
+        remaining_data -= dataForBlock;
+        offset_bytes = 0;
+    }
+    write_sd_block(indirect_block, file->iNode_data.indirect_block);
+    fserror = FS_EXCEEDS_MAX_FILE_SIZE;
+    return bytes_written;
+}
+
+
 /**
  * writes 'numbytes' of data from 'buf' into 'file' at the current file position.
  * @return number of bytes written. If out of space, return value may be lower than numbytes
  */
 unsigned long write_file(File file, void *buf, unsigned long numbytes)
 {
+    //todo export to write to direct blocks/ write to indirect blocks
     fserror = FS_NONE;
     char * data = (char *) buf;
     if(file->mode == READ_ONLY)
@@ -199,68 +331,30 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes)
         fserror = FS_FILE_READ_ONLY;
         return 0;
     }
-    unsigned short iNode_block_number = (file->position)/SOFTWARE_DISK_BLOCK_SIZE;
-    unsigned short block_number;
-    unsigned long long bytes_written = 0;
-    
-    unsigned long long data_length = strlen(data);
-    unsigned long long remaining_data = data_length;
-    if(iNode_block_number < NUM_DIRECT_BLOCKS)
+    if(file->position >= MAX_FILE_SIZE )
     {
-        block_number = file->iNode_data.direct_blocks[iNode_block_number];
-        //dont need to over write
-        char data_to_write[SOFTWARE_DISK_BLOCK_SIZE];
-        while( iNode_block_number < NUM_DIRECT_BLOCKS && bytes_written < data_length &&
-              !(file->iNode_data.direct_blocks[iNode_block_number]))
-        {
-            bzero(data_to_write, SOFTWARE_DISK_BLOCK_SIZE *sizeof(char));
-            unsigned long long dataForBlock = remaining_data < SOFTWARE_DISK_BLOCK_SIZE ? remaining_data : SOFTWARE_DISK_BLOCK_SIZE;
-            strncpy(data_to_write, data + bytes_written, dataForBlock);
-            block_number = find_and_write_block(data_to_write);
-            file->iNode_data.direct_blocks[iNode_block_number] = block_number;
-            if(!block_number )
-            {
-                fserror = FS_OUT_OF_SPACE;
-                struct iNode iNodeBlock[num_files];
-                read_sd_block(iNodeBlock, 1);
-                iNodeBlock[file->dir_entry.iNode_number] = file->iNode_data;
-                write_sd_block(iNodeBlock, 1);
-                return bytes_written;
-            }
-            if(dataForBlock < SOFTWARE_DISK_BLOCK_SIZE)
-            {
-                struct iNode iNodeBlock[num_files];
-                read_sd_block(iNodeBlock, 1);
-                iNodeBlock[file->dir_entry.iNode_number] = file->iNode_data;
-                write_sd_block(iNodeBlock, 1);
-                return bytes_written + dataForBlock;
-            }
-            write_sd_block(data_to_write, block_number);
-            bytes_written += dataForBlock;
-            iNode_block_number++;
-            remaining_data -= dataForBlock;
-           //need to handle running into data && running out of direct blocks etc.
-        }
+        fserror = FS_EXCEEDS_MAX_FILE_SIZE;
+        return 0;
     }
-    else{
-         if(!(file->iNode_data.indirect_block ))
-             file->iNode_data.indirect_block = find_and_set_empty_block();
-        unsigned short indirect_block[num_blocks_in_indirect_block];
-        read_sd_block(indirect_block,file->iNode_data.indirect_block);
-        unsigned short indirect_block_num = iNode_block_number - NUM_DIRECT_BLOCKS;
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+    unsigned long bytes_written = 0;
+    unsigned short iNode_block_index = (file->position)/SOFTWARE_DISK_BLOCK_SIZE;
+    int starting_at_direct = iNode_block_index < NUM_DIRECT_BLOCKS;
+    unsigned short offset_bytes = (file->position) % SOFTWARE_DISK_BLOCK_SIZE;
+    if(strlen(data) < numbytes)
+    {
+        numbytes = strlen(data);
     }
-    
+    if(starting_at_direct && 0 < numbytes )
+    {
+        bytes_written += write_to_direct_blocks(file, data,numbytes, iNode_block_index, offset_bytes);
+        offset_bytes = 0;
+        iNode_block_index = (file->position)/SOFTWARE_DISK_BLOCK_SIZE;
+        numbytes -= bytes_written;
+    }
+    if(!starting_at_direct || 0 < numbytes)
+    {
+        bytes_written += write_to_indirect_blocks(file, data + bytes_written, numbytes, offset_bytes, iNode_block_index - NUM_DIRECT_BLOCKS);
+    }
     return bytes_written;
 }
 
@@ -708,6 +802,19 @@ void max_file_test()
     }
 }
 
+void max_file_write_test(File file)
+{
+    char buf[MAX_FILE_SIZE];
+    memset(buf, 'z', MAX_FILE_SIZE -1);
+    buf[MAX_FILE_SIZE -1] = '\0';
+    write_file(file, buf, MAX_FILE_SIZE-1);
+    
+    
+    
+}
+
+
+
 int main(int argc, const char * argv[]) {
     // insert code here...
         printf("%ud\n", MAX_FILE_SIZE);
@@ -734,9 +841,24 @@ int main(int argc, const char * argv[]) {
         printf("File not created: Illegal File Name\n");
     }
     fs_print_error();
-    unsigned long wrtn = write_file(file, test_data, 514);
+    max_file_write_test(file);
+    seek_file(file, 1);
+    unsigned long wrtn = write_file(file, test_data, 22);
+    memset(test_data, 'a', 515);
+    test_data[514] = '\0';
+    seek_file(file, 0);
+    //unsigned long wrtn2 = write_file(file, test_data, 514);
+    unsigned long wrtn2 = write_file(file, "a", 1);
     fs_print_error();
-
+    bzero(test_data, 515);
+    read_sd_block(test_data, 18);
+    write_file(file, "Hello World",12);
+    printf("first block %s \n", test_data);
+    bzero(test_data, 515);
+    read_sd_block(test_data, 18);
+    printf("second block %s \n", test_data);
+    printf("size of file %llu \n",file->iNode_data.size);
+    
     //create a lot of files
     printf("Creating lots of files/n");
     for(int i = 0; i < 25; i++){
