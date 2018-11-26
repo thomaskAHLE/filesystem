@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		020379E121AC6A8C001452D1 /* filesystem.c in Sources */ = {isa = PBXBuildFile; fileRef = 020379E021AC6A8C001452D1 /* filesystem.c */; };
+		020379E321AC6B0F001452D1 /* formatfs.c in Sources */ = {isa = PBXBuildFile; fileRef = 020379E221AC6B0F001452D1 /* formatfs.c */; };
 		02FEBA7F218D24C1002F07F3 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 02FEBA7E218D24C1002F07F3 /* main.c */; };
 		02FEBA8E2193BB3A002F07F3 /* softwaredisk.c in Sources */ = {isa = PBXBuildFile; fileRef = 02FEBA8D2193BB3A002F07F3 /* softwaredisk.c */; };
 /* End PBXBuildFile section */
@@ -24,6 +26,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		020379E021AC6A8C001452D1 /* filesystem.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = filesystem.c; sourceTree = "<group>"; };
+		020379E221AC6B0F001452D1 /* formatfs.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = formatfs.c; sourceTree = "<group>"; };
+		020379E421AC6CA7001452D1 /* formatfs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = formatfs.h; sourceTree = "<group>"; };
 		02FEBA7B218D24C1002F07F3 /* FileSystemProject */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = FileSystemProject; sourceTree = BUILT_PRODUCTS_DIR; };
 		02FEBA7E218D24C1002F07F3 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
 		02FEBA8B2193BB3A002F07F3 /* softwaredisk.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = softwaredisk.h; sourceTree = "<group>"; };
@@ -65,6 +70,9 @@
 				02FEBA8D2193BB3A002F07F3 /* softwaredisk.c */,
 				02FEBA8B2193BB3A002F07F3 /* softwaredisk.h */,
 				02FEBA7E218D24C1002F07F3 /* main.c */,
+				020379E021AC6A8C001452D1 /* filesystem.c */,
+				020379E221AC6B0F001452D1 /* formatfs.c */,
+				020379E421AC6CA7001452D1 /* formatfs.h */,
 			);
 			path = FileSystemProject;
 			sourceTree = "<group>";
@@ -126,6 +134,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				02FEBA7F218D24C1002F07F3 /* main.c in Sources */,
+				020379E321AC6B0F001452D1 /* formatfs.c in Sources */,
+				020379E121AC6A8C001452D1 /* filesystem.c in Sources */,
 				02FEBA8E2193BB3A002F07F3 /* softwaredisk.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
