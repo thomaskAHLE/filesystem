@@ -185,6 +185,78 @@ int find_and_write_block(void * data)
     return block_num;
 }
 
+unsigned long read_direct_blocks(File file, char * buf,unsigned long numbytes, unsigned short direct_index, unsigned short offset_bytes )
+{
+    unsigned long bytes_read =0;
+    unsigned long remaining_bytes = numbytes;
+    char data_to_read[512];
+    unsigned long bytes_to_read;
+    while(direct_index < NUM_DIRECT_BLOCKS && bytes_read < numbytes)
+    {
+        bytes_to_read = remaining_bytes < SOFTWARE_DISK_BLOCK_SIZE - offset_bytes? remaining_bytes : SOFTWARE_DISK_BLOCK_SIZE - offset_bytes;
+        bzero(data_to_read, 512);
+        if(file->iNode_data.direct_blocks[direct_index])
+        {
+            read_sd_block(data_to_read, file->iNode_data.direct_blocks[direct_index]);
+        }
+        memcpy(buf + bytes_read, data_to_read  + offset_bytes, bytes_to_read);
+        file->position += bytes_to_read;
+        bytes_read += bytes_to_read;
+        remaining_bytes -= bytes_to_read;
+        direct_index++;
+        offset_bytes = 0;
+        
+    }
+    return bytes_read;
+}
+
+unsigned long read_indirect_blocks(File file, void * buf,unsigned long numbytes, unsigned long bytes_read, unsigned short offset_bytes, unsigned short indirect_index )
+{
+    unsigned long remaining_bytes = numbytes;
+    char data_to_read[512];
+    unsigned long bytes_to_read;
+    unsigned short indirect_block[num_blocks_in_indirect_block];
+    read_sd_block(indirect_block, file->iNode_data.indirect_block);
+    while(indirect_index < num_blocks_in_indirect_block && bytes_read < numbytes)
+    {
+        bytes_to_read = remaining_bytes < SOFTWARE_DISK_BLOCK_SIZE - offset_bytes? remaining_bytes : SOFTWARE_DISK_BLOCK_SIZE - offset_bytes;
+        bzero(data_to_read, 512);
+        if(indirect_block[indirect_index])
+        {
+            read_sd_block(data_to_read, indirect_block[indirect_index]);
+        }
+        memcpy(buf + bytes_read, data_to_read  + offset_bytes, bytes_to_read);
+        file->position += bytes_to_read;
+        bytes_read += bytes_to_read;
+        remaining_bytes -= bytes_to_read;
+        indirect_index++;
+        offset_bytes = 0;
+    }
+    if(bytes_read < numbytes)
+    fserror = FS_EXCEEDS_MAX_FILE_SIZE;
+    return bytes_read;
+}
+
+unsigned long read_file(File file, void *buf, unsigned long numbytes)
+{
+    fserror = FS_NONE;
+    unsigned long bytes_read = 0;
+    unsigned short iNode_block_index = (file->position)/SOFTWARE_DISK_BLOCK_SIZE;
+    int starting_at_direct = iNode_block_index < NUM_DIRECT_BLOCKS;
+    unsigned short offset_bytes = (file->position) % SOFTWARE_DISK_BLOCK_SIZE;
+    if(starting_at_direct && 0 < numbytes )
+    {
+        bytes_read += read_direct_blocks(file, buf,numbytes, iNode_block_index, offset_bytes);
+        offset_bytes = 0;
+        iNode_block_index = (file->position)/SOFTWARE_DISK_BLOCK_SIZE;
+    }
+    if(!starting_at_direct || 0 < numbytes - bytes_read)
+    {
+        bytes_read = read_indirect_blocks(file, buf , numbytes,bytes_read, offset_bytes, iNode_block_index - NUM_DIRECT_BLOCKS);
+    }
+    return bytes_read;
+    
+}
 
 unsigned long write_to_direct_blocks(File file, char * data, unsigned long numbytes, unsigned short direct_block_index, unsigned short offset_bytes )
 {
@@ -726,6 +798,16 @@ void print_file_data(File file )
 {
     
 }
+
+void read_full_file(File file)
+{
+    char buf[MAX_FILE_SIZE];
+    bzero(buf,  MAX_FILE_SIZE -1);
+    
+    read_file(file, buf, MAX_FILE_SIZE-1);
+    printf("full file %s \n", buf);
+}
+
 void clearblock_test()
 {
     char testblock[SOFTWARE_DISK_BLOCK_SIZE];
@@ -813,6 +895,17 @@ void max_file_write_test(File file)
     
 }
 
+void read_test(File file)
+{
+    char * test_string = "Hello World";
+    seek_file(file, 5);
+    write_file(file, test_string, strlen(test_string));
+    seek_file(file, 5);
+    char rbuf[11];
+    bzero(rbuf, 11);
+    read_file(file, rbuf, 11);
+    printf("read test %s \n", rbuf);
+}
 
 
 int main(int argc, const char * argv[]) {
@@ -821,6 +914,7 @@ int main(int argc, const char * argv[]) {
     init_software_disk();
     initialize_fs();
     File file = create_file("file.txt", READ_WRITE);
+    read_test(file);
     close_file(file);
     file = open_file("file.txt", READ_WRITE);
     close_file(file);
@@ -842,6 +936,8 @@ int main(int argc, const char * argv[]) {
     }
     fs_print_error();
     max_file_write_test(file);
+    seek_file(file, 0);
+    read_full_file(file);
     seek_file(file, 1);
     unsigned long wrtn = write_file(file, test_data, 22);
     memset(test_data, 'a', 515);
