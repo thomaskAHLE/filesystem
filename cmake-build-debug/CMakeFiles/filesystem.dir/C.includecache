@@ -1,0 +1,24 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/GG46195x/Documents/School/Operating Systems/filesystem/filesystem/FileSystemProject/filesystem.h
+
+/Users/GG46195x/Documents/School/Operating Systems/filesystem/filesystem/FileSystemProject/main.c
+stdio.h
+-
+stdlib.h
+-
+string.h
+-
+softwaredisk.h
+/Users/GG46195x/Documents/School/Operating Systems/filesystem/filesystem/FileSystemProject/softwaredisk.h
+filesystem.h
+/Users/GG46195x/Documents/School/Operating Systems/filesystem/filesystem/FileSystemProject/filesystem.h
+
+/Users/GG46195x/Documents/School/Operating Systems/filesystem/filesystem/FileSystemProject/softwaredisk.h
+
