@@ -188,7 +188,9 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes)
     unsigned short iNode_block_number = (file->position)/SOFTWARE_DISK_BLOCK_SIZE;
     unsigned short block_number;
     unsigned long long bytes_written = 0;
+    
     unsigned long long data_length = strlen(data);
+    unsigned long long remaining_data = data_length;
     if(iNode_block_number < NUM_DIRECT_BLOCKS)
     {
         block_number = file->iNode_data.direct_blocks[iNode_block_number];
@@ -198,7 +200,7 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes)
               !(file->iNode_data.direct_blocks[iNode_block_number]))
         {
             bzero(data_to_write, SOFTWARE_DISK_BLOCK_SIZE *sizeof(char));
-            unsigned long long dataForBlock = data_length < SOFTWARE_DISK_BLOCK_SIZE ? data_length : SOFTWARE_DISK_BLOCK_SIZE;
+            unsigned long long dataForBlock = remaining_data < SOFTWARE_DISK_BLOCK_SIZE ? remaining_data : SOFTWARE_DISK_BLOCK_SIZE;
             strncpy(data_to_write, data + bytes_written, dataForBlock);
             block_number = find_and_write_block(data_to_write);
             file->iNode_data.direct_blocks[iNode_block_number] = block_number;
@@ -222,11 +224,27 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes)
             write_sd_block(data_to_write, block_number);
             bytes_written += dataForBlock;
             iNode_block_number++;
+            remaining_data -= dataForBlock;
            //need to handle running into data && running out of direct blocks etc.
         }
     }
     else{
-        //need to handle writing in direct blocks
+         if(!(file->iNode_data.indirect_block ))
+             file->iNode_data.indirect_block = find_and_set_empty_block();
+        unsigned short indirect_block[num_blocks_in_indirect_block];
+        read_sd_block(indirect_block,file->iNode_data.indirect_block);
+        unsigned short indirect_block_num = iNode_block_number - NUM_DIRECT_BLOCKS;
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
     }
     
     return bytes_written;
@@ -648,8 +666,14 @@ int main(int argc, const char * argv[]) {
         printf("File not created: Illegal File Name\n");
     }
     fs_print_error();
-    unsigned long wrtn = write_file(file, test_data, 513);
+    unsigned long wrtn = write_file(file, test_data, 514);
     fs_print_error();
+    bzero(test_data, 515);
+    read_sd_block(test_data, 18);
+    printf("first block %s ", test_data);
+    bzero(test_data, 515);
+    read_sd_block(test_data, 19);
+    printf("second block %s ", test_data);
     
     return 0;
 }
