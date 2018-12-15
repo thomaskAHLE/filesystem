@@ -73,10 +73,10 @@ void max_file_test()
 
 void max_file_write_test(File file)
 {
-    char buf[136704];
-    memset(buf, 'z', 136703);
-    buf[136703] = '\0';
-    write_file(file, buf, 136703);
+    char buf[get_max_file_size()];
+    memset(buf, 'z', get_max_file_size());
+    buf[get_max_file_size()] = '\0';
+    write_file(file, buf, get_max_file_size());
     
 }
 
@@ -104,9 +104,8 @@ int main(int argc, const char * argv[]) {
     close_file(file);
     delete_file("file.txt");
     file = create_file("file.txt", READ_WRITE);
-    //clearblock_test();
-    //max_file_test();
-    
+    printf("max file write test\n");
+    max_file_write_test(file);
     char test_data[515];
     memset(test_data, 'z', 515);
     test_data[514] = '\0';

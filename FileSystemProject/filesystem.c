@@ -93,6 +93,11 @@ void fs_print_error()
     
 }
 
+/**
+ * Gets max file size
+ * @return file size in bytes
+ */
+
 unsigned long get_max_file_size()
 {
     return MAX_FILE_SIZE;
@@ -784,7 +789,7 @@ File create_file(char *name, FileMode mode)
     add_to_open_files(file);
     return file;
 }
-//debugging methods
+//debugging method
 void print_open_files()
 {
     File file_iterator = first_open_file;
