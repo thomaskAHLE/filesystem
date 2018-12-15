@@ -93,6 +93,11 @@ void fs_print_error()
     
 }
 
+unsigned long get_max_file_size()
+{
+    return MAX_FILE_SIZE;
+}
+
 /**
  * Searches bit vector for empty block if found sets it to 1 and returns the block number
  * @return block number > 0  or 0 if no empty space or on initialization of bit vector
@@ -794,116 +799,8 @@ void print_open_files()
     }
 }
 
-void print_file_data(File file )
-{
-    
-}
 
-void read_full_file(File file)
-{
-    char buf[MAX_FILE_SIZE];
-    bzero(buf,  MAX_FILE_SIZE -1);
-    
-    read_file(file, buf, MAX_FILE_SIZE-1);
-    printf("full file %s \n", buf);
-}
 
-void clearblock_test()
-{
-    char testblock[SOFTWARE_DISK_BLOCK_SIZE];
-    memset(testblock, 'a', SOFTWARE_DISK_BLOCK_SIZE *sizeof(char));
-    printf("%s\n",testblock);
-    int blockNum = find_and_write_block(testblock);
-    bzero(testblock, SOFTWARE_DISK_BLOCK_SIZE* (sizeof(char)));
-    read_sd_block(testblock, blockNum);
-    printf("%s written to block \n", testblock);
-    clear_block(blockNum);
-    read_sd_block(testblock, blockNum);
-    printf("%s after clear_block\n", testblock);
-}
-void max_file_test()
-{
-    File fileArr[num_files];
-    char  fileName[11];
-    
-    for(int i = 0; i < num_files ;i++)
-    {
-        sprintf(fileName, "%s%d%s","file",i,".txt");
-        fileArr[i] = create_file(fileName, READ_ONLY);
-        fs_print_error();
-    }
-    print_open_files();
-    printf("closing all files...\n");
-    for(int i = 0; i< num_files; i++)
-    {
-        close_file(fileArr[i]);
-    }
-    print_open_files();
-    printf("opening all files ...\n");
-    for(int i = 0; i < num_files ;i++)
-    {
-        sprintf(fileName, "%s%d%s","file",i,".txt");
-        fileArr[i] = open_file(fileName, READ_ONLY);
-        fs_print_error();
-    }
-    print_open_files();
-    printf("closing all files...\n");
-    for(int i = 0; i< num_files; i++)
-    {
-        close_file(fileArr[i]);
-        fs_print_error();
-    }
-    print_open_files();
-    printf("opening out of order... \n");
-    for(int i = 0; i < num_files/2; i++)
-    {
-        sprintf(fileName, "%s%d%s","file",i,".txt");
-        fileArr[i] = open_file(fileName, READ_ONLY);
-        fs_print_error();
-        sprintf(fileName, "%s%d%s","file",num_files - i -1,".txt");
-        fileArr[num_files-i-1] = open_file(fileName, READ_ONLY);
-        fs_print_error();
-    }
-    print_open_files();
-    printf("closing out of order files \n");
-    for(int i = 0; i< num_files; i++)
-    {
-        close_file(fileArr[i]);
-        fs_print_error();
-        print_open_files();
-    }
-    printf("trying to create an extra file \n");
-    create_file("file17.txt", READ_ONLY);
-    fs_print_error();
-    printf("deleting files...\n");
-    for(int i = 0; i < num_files; i++)
-    {
-        sprintf(fileName, "%s%d%s","file",i,".txt");
-        delete_file(fileName);
-        fs_print_error();
-    }
-}
 
-void max_file_write_test(File file)
-{
-    char buf[MAX_FILE_SIZE];
-    memset(buf, 'z', MAX_FILE_SIZE -1);
-    buf[MAX_FILE_SIZE -1] = '\0';
-    write_file(file, buf, MAX_FILE_SIZE-1);
-    
-    
-    
-}
 
-void read_test(File file)
-{
-    char * test_string = "Hello World";
-    seek_file(file, 5);
-    write_file(file, test_string, strlen(test_string));
-    seek_file(file, 5);
-    char rbuf[11];
-    bzero(rbuf, 11);
-    read_file(file, rbuf, 11);
-    printf("read test %s \n", rbuf);
-}
 

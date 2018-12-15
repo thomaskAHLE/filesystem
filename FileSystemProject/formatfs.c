@@ -6,11 +6,10 @@
 //  Copyright © 2018 Thomas Hill. All rights reserved.
 //
 
-#include <stdio.h>
-#include "softwaredisk.c"
+#include "softwaredisk.h"
 #include "formatfs.h"
 
-void formatfs(void)
+void formatfs()
 {
     init_software_disk();
 }

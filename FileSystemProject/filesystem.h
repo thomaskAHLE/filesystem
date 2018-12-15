@@ -66,6 +66,9 @@ int delete_file(char *name);
 // Always sets 'fserror' global.
 int file_exists(char *name);
 
+//returns max file size in bytes
+unsigned long get_max_file_size(void);
+
 // describe current filesystem error code by printing a descriptive message to standard
 // error.
 void fs_print_error(void);

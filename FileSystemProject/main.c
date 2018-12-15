@@ -6,8 +6,8 @@
 
 void read_full_file(File file)
 {
-    char buf[136704];
-    bzero(buf,   1367043);
+    char buf[get_max_file_size()];
+    bzero(buf, get_max_file_size());
     
     read_file(file, buf, 136703);
     printf("full file %s \n", buf);
@@ -124,48 +124,6 @@ int main(int argc, const char * argv[]) {
     read_full_file(file);
     close_file(file);
     delete_file("file.txt");
-    
-    /*seek_file(file, 1);
-     unsigned long wrtn = write_file(file, test_data, 22);
-     memset(test_data, 'a', 515);
-     test_data[514] = '\0';
-     seek_file(file, 0);
-     //unsigned long wrtn2 = write_file(file, test_data, 514);
-     unsigned long wrtn2 = write_file(file, "a", 1);
-     fs_print_error();
-     bzero(test_data, 515);
-     read_sd_block(test_data, 18);
-     write_file(file, "Hello World",12);
-     printf("first block %s \n", test_data);
-     bzero(test_data, 515);
-     read_sd_block(test_data, 18);
-     printf("second block %s \n", test_data);
-     printf("size of file %llu \n",file->iNode_data.size);
-     
-     //create a lot of files
-     printf("Creating lots of files/n");
-     for(int i = 0; i < 25; i++){
-     char buffer[50];
-     sprintf(buffer, "file%d.txt", i);
-     if(create_file(buffer, READ_WRITE))
-     printf("file%d successfully created\n", i);
-     else
-     printf("file%d not created\n", i);
-     }
-     
-     //delete file
-     close_file(file);
-     delete_file("file.txt");
-     file = open_file("file.txt", READ_WRITE);
-     fs_print_error();
-     //check if now there is space to write another file
-     file = create_file("file24.txt", READ_WRITE);
-     fs_print_error();*/
-    
-    
-    
-    
-    
     return 0;
 }
 
