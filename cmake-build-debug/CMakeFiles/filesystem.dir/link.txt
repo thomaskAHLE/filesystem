@@ -1,1 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/cc -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/filesystem.dir/FileSystemProject/main.c.o CMakeFiles/filesystem.dir/FileSystemProject/softwaredisk.c.o  -o filesystem 
