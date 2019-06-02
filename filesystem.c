@@ -9,8 +9,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 #include "softwaredisk.h"
 #include "filesystem.h"
+
 
 #define BITS_PER_BYTE  8
 #define MAX_FILES 16
@@ -18,19 +20,21 @@
 
 //number of initail blocks = block for bitvector + block for iNodes + blocks for Directory Entries
 #define NUM_INIT_BLOCKS 18
+#define MAX_FILE_NAME_LENGTH 256
 #define MAX_FILE_SIZE SOFTWARE_DISK_BLOCK_SIZE * (NUM_DIRECT_BLOCKS + num_blocks_in_indirect_block)
 
 struct iNode
 {
-    unsigned long long size;
-    unsigned short direct_blocks[NUM_DIRECT_BLOCKS];
-    unsigned short indirect_block;
+    uint64_t size;
+    uint16_t direct_blocks[NUM_DIRECT_BLOCKS];
+    uint16_t indirect_block;
 };
 
-struct DirectoryEntry{
-    char name[256];
-    unsigned short iNode_number;
-    char padding[SOFTWARE_DISK_BLOCK_SIZE - 256 -sizeof(unsigned short)];
+struct DirectoryEntry
+{
+    char name[MAX_FILE_NAME_LENGTH];
+    uint16_t iNode_number;
+    char padding[SOFTWARE_DISK_BLOCK_SIZE - MAX_FILE_NAME_LENGTH - sizeof(uint16_t)];
 };
 
 struct FileInternals
@@ -38,17 +42,15 @@ struct FileInternals
     struct DirectoryEntry dir_entry;
     struct iNode iNode_data;
     FileMode mode;
-    unsigned long long position;
+    uint64_t position;
     struct FileInternals* next;
 };
 
 
-
-
 struct FileInternals * first_open_file;
-const unsigned int bit_vector_length = SOFTWARE_DISK_BLOCK_SIZE/sizeof(unsigned long long);
+const unsigned int bit_vector_length = SOFTWARE_DISK_BLOCK_SIZE/sizeof(uint64_t);
 const unsigned int num_files = SOFTWARE_DISK_BLOCK_SIZE/sizeof(struct iNode);
-const unsigned int num_blocks_in_indirect_block = SOFTWARE_DISK_BLOCK_SIZE/sizeof(unsigned short);
+const unsigned int num_blocks_in_indirect_block = SOFTWARE_DISK_BLOCK_SIZE/sizeof(uint16_t);
 
 FSError fserror;
 
@@ -89,8 +91,7 @@ void fs_print_error()
             break;
         default:
             printf("FS: Unknown error code %d.\n", fserror);
-    }
-    
+    }    
 }
 
 /**
@@ -109,20 +110,20 @@ unsigned long get_max_file_size()
  */
 int find_and_set_empty_block()
 {
-    unsigned long long bit_vector[bit_vector_length];
+    uint64_t bit_vector[bit_vector_length];
     read_sd_block(bit_vector, 0);
-    unsigned long long full = 0xFFFFFFFFFFFFFFFF;
+    uint64_t full = 0xFFFFFFFFFFFFFFFF;
     int position = 0;
     for(int i = 0; i < bit_vector_length; i++)
     {
         if(!(bit_vector[i]^full))
         {
-            position += sizeof(unsigned long long) * BITS_PER_BYTE;
+            position += sizeof(uint64_t) * BITS_PER_BYTE;
         }
         else
         {
-            unsigned long long search_bit  = 1;
-            for(int j = 0; j < sizeof(unsigned long long) * BITS_PER_BYTE; j++, position++)
+            uint64_t search_bit  = 1;
+            for(int j = 0; j < sizeof(uint64_t) * BITS_PER_BYTE; j++, position++)
             {
                 if(! (bit_vector[i] & search_bit))
                 {
@@ -145,11 +146,11 @@ int find_and_set_empty_block()
  */
 int clear_block_in_bit_vector(unsigned int block_num)
 {
-    unsigned long long bit_vector[bit_vector_length];
+    uint64_t bit_vector[bit_vector_length];
     read_sd_block(bit_vector, 0);
-    unsigned int position_in_arr = block_num / (sizeof(unsigned long long)*BITS_PER_BYTE);
-    unsigned int bit_position = block_num % (sizeof(unsigned long long)*BITS_PER_BYTE);
-    unsigned long long bit = 1;
+    unsigned int position_in_arr = block_num / (sizeof(uint64_t)*BITS_PER_BYTE);
+    unsigned int bit_position = block_num % (sizeof(uint64_t)*BITS_PER_BYTE);
+    uint64_t bit = 1;
     bit = bit<< bit_position;
     //bit was not set
     if(!(bit_vector[position_in_arr] & bit)) return -1;
@@ -167,11 +168,11 @@ int clear_block_in_bit_vector(unsigned int block_num)
  */
 int write_specific_block_in_bit_vector(unsigned int block_num)
 {
-    unsigned long long bit_vector[bit_vector_length];
+    uint64_t bit_vector[bit_vector_length];
     read_sd_block(bit_vector, 0);
-    unsigned int position_in_arr = block_num / (sizeof(unsigned long long)*BITS_PER_BYTE);
-    unsigned int bit_position = block_num % (sizeof(unsigned long long)*BITS_PER_BYTE);
-    unsigned long long bit = 1;
+    unsigned int position_in_arr = block_num / (sizeof(uint64_t)*BITS_PER_BYTE);
+    unsigned int bit_position = block_num % (sizeof(uint64_t)*BITS_PER_BYTE);
+    uint64_t bit = 1;
     bit = bit<< bit_position;
     //bit was not set
     if((bit_vector[position_in_arr] & bit)) return -1;
@@ -195,16 +196,16 @@ int find_and_write_block(void * data)
     return block_num;
 }
 
-unsigned long read_direct_blocks(File file, char * buf,unsigned long numbytes, unsigned short direct_index, unsigned short offset_bytes )
+unsigned long read_direct_blocks(File file, char * buf,unsigned long numbytes, uint16_t direct_index, uint16_t offset_bytes )
 {
     unsigned long bytes_read =0;
     unsigned long remaining_bytes = numbytes;
-    char data_to_read[512];
+    char data_to_read[SOFTWARE_DISK_BLOCK_SIZE];
     unsigned long bytes_to_read;
     while(direct_index < NUM_DIRECT_BLOCKS && bytes_read < numbytes)
     {
         bytes_to_read = remaining_bytes < SOFTWARE_DISK_BLOCK_SIZE - offset_bytes? remaining_bytes : SOFTWARE_DISK_BLOCK_SIZE - offset_bytes;
-        bzero(data_to_read, 512);
+        bzero(data_to_read, SOFTWARE_DISK_BLOCK_SIZE);
         if(file->iNode_data.direct_blocks[direct_index])
         {
             read_sd_block(data_to_read, file->iNode_data.direct_blocks[direct_index]);
@@ -220,17 +221,17 @@ unsigned long read_direct_blocks(File file, char * buf,unsigned long numbytes, u
     return bytes_read;
 }
 
-unsigned long read_indirect_blocks(File file, void * buf,unsigned long numbytes, unsigned long bytes_read, unsigned short offset_bytes, unsigned short indirect_index )
+unsigned long read_indirect_blocks(File file, void * buf,unsigned long numbytes, unsigned long bytes_read, uint16_t offset_bytes, uint16_t indirect_index )
 {
     unsigned long remaining_bytes = numbytes;
-    char data_to_read[512];
+    char data_to_read[SOFTWARE_DISK_BLOCK_SIZE];
     unsigned long bytes_to_read;
-    unsigned short indirect_block[num_blocks_in_indirect_block];
+    uint16_t indirect_block[num_blocks_in_indirect_block];
     read_sd_block(indirect_block, file->iNode_data.indirect_block);
     while(indirect_index < num_blocks_in_indirect_block && bytes_read < numbytes)
     {
         bytes_to_read = remaining_bytes < SOFTWARE_DISK_BLOCK_SIZE - offset_bytes? remaining_bytes : SOFTWARE_DISK_BLOCK_SIZE - offset_bytes;
-        bzero(data_to_read, 512);
+        bzero(data_to_read, SOFTWARE_DISK_BLOCK_SIZE);
         if(indirect_block[indirect_index])
         {
             read_sd_block(data_to_read, indirect_block[indirect_index]);
@@ -251,9 +252,9 @@ unsigned long read_file(File file, void *buf, unsigned long numbytes)
 {
     fserror = FS_NONE;
     unsigned long bytes_read = 0;
-    unsigned short iNode_block_index = (file->position)/SOFTWARE_DISK_BLOCK_SIZE;
+    uint16_t iNode_block_index = (file->position)/SOFTWARE_DISK_BLOCK_SIZE;
     int starting_at_direct = iNode_block_index < NUM_DIRECT_BLOCKS;
-    unsigned short offset_bytes = (file->position) % SOFTWARE_DISK_BLOCK_SIZE;
+    uint16_t offset_bytes = (file->position) % SOFTWARE_DISK_BLOCK_SIZE;
     if(starting_at_direct && 0 < numbytes )
     {
         bytes_read += read_direct_blocks(file, buf,numbytes, iNode_block_index, offset_bytes);
@@ -268,14 +269,14 @@ unsigned long read_file(File file, void *buf, unsigned long numbytes)
     
 }
 
-unsigned long write_to_direct_blocks(File file, char * data, unsigned long numbytes, unsigned short direct_block_index, unsigned short offset_bytes )
+unsigned long write_to_direct_blocks(File file, char * data, unsigned long numbytes, uint16_t direct_block_index, uint16_t offset_bytes )
 {
-    unsigned short block_number;
-    unsigned long long bytes_written = 0;
+    uint16_t block_number;
+    uint64_t bytes_written = 0;
     
     numbytes = strlen(data)  < numbytes ? strlen(data) : numbytes;
-    unsigned long long remaining_data = numbytes;
-    unsigned long long dataForBlock = 0;
+    uint64_t remaining_data = numbytes;
+    uint64_t dataForBlock = 0;
     block_number = file->iNode_data.direct_blocks[direct_block_index];
     char data_to_write[SOFTWARE_DISK_BLOCK_SIZE];
     while( direct_block_index < NUM_DIRECT_BLOCKS && bytes_written < numbytes)
@@ -329,7 +330,7 @@ unsigned long write_to_direct_blocks(File file, char * data, unsigned long numby
     return bytes_written;
 }
 
-unsigned long write_to_indirect_blocks(File file, char *data, unsigned long numbytes, unsigned short offset_bytes, unsigned short indirect_block_index)
+unsigned long write_to_indirect_blocks(File file, char *data, unsigned long numbytes, uint16_t offset_bytes, uint16_t indirect_block_index)
 {
     unsigned long bytes_written = 0;
     if(!(file->iNode_data.indirect_block ))
@@ -340,12 +341,12 @@ unsigned long write_to_indirect_blocks(File file, char *data, unsigned long numb
         iNodeBlock[file->dir_entry.iNode_number] = file->iNode_data;
         write_sd_block(iNodeBlock, 1);
     }
-    unsigned short indirect_block[num_blocks_in_indirect_block];
+    uint16_t indirect_block[num_blocks_in_indirect_block];
     unsigned long remaining_data = numbytes;
     read_sd_block(indirect_block,file->iNode_data.indirect_block);
     char data_to_write[SOFTWARE_DISK_BLOCK_SIZE];
-    unsigned short dataForBlock = 0;
-    unsigned short block_number;
+    uint16_t dataForBlock = 0;
+    uint16_t block_number;
     while(indirect_block_index < num_blocks_in_indirect_block && bytes_written < numbytes)
     {
         bzero(data_to_write, SOFTWARE_DISK_BLOCK_SIZE *sizeof(char));
@@ -419,9 +420,9 @@ unsigned long write_file(File file, void *buf, unsigned long numbytes)
         return 0;
     }
     unsigned long bytes_written = 0;
-    unsigned short iNode_block_index = (file->position)/SOFTWARE_DISK_BLOCK_SIZE;
+    uint16_t iNode_block_index = (file->position)/SOFTWARE_DISK_BLOCK_SIZE;
     int starting_at_direct = iNode_block_index < NUM_DIRECT_BLOCKS;
-    unsigned short offset_bytes = (file->position) % SOFTWARE_DISK_BLOCK_SIZE;
+    uint16_t offset_bytes = (file->position) % SOFTWARE_DISK_BLOCK_SIZE;
     if(strlen(data) < numbytes)
     {
         numbytes = strlen(data);
@@ -477,7 +478,7 @@ int clear_block(unsigned int block_num)
  */
 int is_initialized()
 {
-    unsigned long long bit_vector[bit_vector_length];
+    uint64_t bit_vector[bit_vector_length];
     read_sd_block(bit_vector, 0);
     return bit_vector[0] & 1;
 }
@@ -525,8 +526,8 @@ int file_exists(char * name)
     for(int i = 2; i < 2 + num_files; i++)
     {
         read_sd_block(&de, i);
-        if(!strncmp(de.name, name, 256))
-            return 1;
+        if(!strncmp(de.name, name, MAX_FILE_NAME_LENGTH))
+        return 1;
     }
     return 0;
 }
@@ -546,7 +547,7 @@ int is_file_open(char *name)
         File finder = first_open_file;
         while(finder)
         {
-            if(!strncmp(finder->dir_entry.name, name, 256))
+            if(!strncmp(finder->dir_entry.name, name, MAX_FILE_NAME_LENGTH))
                 return 1;
             finder = finder->next;
         }
@@ -560,7 +561,7 @@ int is_file_open(char *name)
  */
 void delete_indirect_block(int indirect_block_number)
 {
-    unsigned short indirect_block[num_blocks_in_indirect_block];
+    uint16_t indirect_block[num_blocks_in_indirect_block];
     for(int i = 0; i  <num_blocks_in_indirect_block; i++)
     {
         if(indirect_block[i])
@@ -674,7 +675,7 @@ void close_file(File file)
     }
     else
     {
-        if(!strncmp(file->dir_entry.name, first_open_file->dir_entry.name,256))
+        if(!strncmp(file->dir_entry.name, first_open_file->dir_entry.name,MAX_FILE_NAME_LENGTH))
         {
             if(!first_open_file->next)
             {
@@ -688,7 +689,7 @@ void close_file(File file)
         else
         {
             File file_iterator = first_open_file;
-            while(strncmp(file_iterator->next->dir_entry.name, file->dir_entry.name, 256))
+            while(strncmp(file_iterator->next->dir_entry.name, file->dir_entry.name, MAX_FILE_NAME_LENGTH))
             {
                 file_iterator = file_iterator->next;
             }
@@ -719,7 +720,7 @@ File open_file(char *name, FileMode mode)
         File finder = first_open_file;
         while(finder)
         {
-            if(!strncmp(finder->dir_entry.name, name, 256))
+            if(!strncmp(finder->dir_entry.name, name, MAX_FILE_NAME_LENGTH))
                 break;
         }
         return finder;
@@ -729,7 +730,7 @@ File open_file(char *name, FileMode mode)
     for(int i = 2; i < num_files + 2; i++)
     {
         read_sd_block(&de, i);
-        if(! strncmp(de.name, name, 256))
+        if(! strncmp(de.name, name, MAX_FILE_NAME_LENGTH))
         {
             file_to_open->dir_entry = de;
             break;
@@ -776,7 +777,7 @@ File create_file(char *name, FileMode mode)
     }
     //i now used for inode number
     dir_entry.iNode_number = i -2;
-    strncpy(dir_entry.name, name, 256);
+    strncpy(dir_entry.name, name, MAX_FILE_NAME_LENGTH);
     write_sd_block(&dir_entry, i);
     File file = malloc(sizeof(struct FileInternals));
     file->dir_entry = dir_entry;
@@ -789,6 +790,29 @@ File create_file(char *name, FileMode mode)
     add_to_open_files(file);
     return file;
 }
+
+void list_files()
+{
+	if(!is_initialized())
+    {
+        initialize_fs();
+    }
+    fserror = FS_NONE;
+    struct DirectoryEntry de;
+    //starting at block with first directory entry read all directory entries check for name
+    for(int i = 2; i < 2 + num_files; i++)
+    {
+        read_sd_block(&de, i);
+        if(de.name[0] != 0)
+		{
+			printf("%s \n", de.name);
+		}
+    }
+
+}
+
+
+
 //debugging method
 void print_open_files()
 {
@@ -799,7 +823,7 @@ void print_open_files()
     }
     while(file_iterator)
     {
-        printf("File open with name %s inode number %d and length %llu \n", file_iterator->dir_entry.name, file_iterator->dir_entry.iNode_number, file_iterator->iNode_data.size);
+        printf("File open with name %s inode number %d and length %lu \n", file_iterator->dir_entry.name, file_iterator->dir_entry.iNode_number, file_iterator->iNode_data.size);
         file_iterator = file_iterator->next;
     }
 }

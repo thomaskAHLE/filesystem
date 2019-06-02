@@ -73,6 +73,10 @@ unsigned long get_max_file_size(void);
 // error.
 void fs_print_error(void);
 
+//list all files in filesystem
+void list_files();
+
+
 // filesystem error code set (set by each filesystem function)
 extern FSError fserror;
  

@@ -8,7 +8,7 @@
 #include <strings.h>
 #include "softwaredisk.h"
 
-#define NUM_BLOCKS 5000
+#define NUM_BLOCKS 8192
 #define BACKING_STORE "sdprivate.sd"
 
 // internals of software disk implementation

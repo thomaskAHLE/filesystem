@@ -59,6 +59,9 @@ void max_file_test()
         close_file(fileArr[i]);
         fs_print_error();
     }
+
+	printf("printing all fliles \n");
+	list_files();
     printf("trying to create an extra file \n");
     create_file("file17.txt", READ_ONLY);
     fs_print_error();
@@ -123,6 +126,6 @@ int main(int argc, const char * argv[]) {
     read_full_file(file);
     close_file(file);
     delete_file("file.txt");
-    return 0;
+	return 0;
 }
 

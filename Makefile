@@ -23,4 +23,5 @@ $(TARGET): $(OBJS)
 	$(CC) $(OBJS) -Wall $(LIBS) -o $@
 clean:
 	rm -f *.o 
+	rm -f *.sd
 	rm -f $(TARGET)
