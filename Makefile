@@ -1,4 +1,4 @@
-TARGET = main
+TARGET = testfilesystem
 LIBS = -lm
 CC = gcc
 CFLAGS = -g -Wall

@@ -1,0 +1,7 @@
+//only want to track .c/.h/Makefile
+!*.c 
+!*.h
+!Makefile
+
+
+
